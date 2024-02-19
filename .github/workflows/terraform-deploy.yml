@@ -1,0 +1,46 @@
+name: Terraform Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Configure GCP credentials
+      run: |
+        echo "$GCP_SERVICE_ACCOUNT" > gcp-service-account.json
+        gcloud auth activate-service-account --key-file=gcp-service-account.json
+        gcloud config set project $GCP_PROJECT_ID
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve -var="gke_cluster_name=${{ env.GKE_CLUSTER_NAME }}" -var="nginx_image=${{ env.NGINX_IMAGE }}"
+
+    - name: Display Outputs
+      run: |
+        echo "Kubernetes API Endpoint: ${{ steps.display.outputs.kubernetes_api_endpoint }}"
+        echo "Nginx External IP: ${{ steps.display.outputs.nginx_external_ip }}"
+
+  display:
+    needs: terraform-deploy
+    runs-on: ubuntu-latest
+
+    outputs:
+      kubernetes_api_endpoint: ${{ needs.terraform-deploy.outputs.kubernetes_api_endpoint }}
+      nginx_external_ip: ${{ needs.terraform-deploy.outputs.nginx_external_ip }}
+
+    steps:
+    - name: Display Outputs
+      run: echo "Kubernetes API Endpoint: ${{ needs.terraform-deploy.outputs.kubernetes_api_endpoint }}\nNginx External IP: ${{ needs.terraform-deploy.outputs.nginx_external_ip }}"
